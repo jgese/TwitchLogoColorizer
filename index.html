@@ -277,6 +277,12 @@
   const NATIVE_W = 5852, NATIVE_H = 1948;
   const RATIO = NATIVE_W / NATIVE_H;
 
+  // The Face layer's source files were padded to the native canvas with the content
+  // vertically centered, which doesn't match where Outline/Extrusion actually sit.
+  // Measured directly against Outline's baseline: Face needs to move up 125px at
+  // native resolution. Expressed in native px, then scaled to whatever size is drawn.
+  const LAYER_Y_OFFSET = { Face: -125, Outline: 0, Extrusion: 0 };
+
   // Starting selection — arbitrary, easy to change here.
   const selection = { Face: "TwitchPurple", Outline: "White", Extrusion: "Dragon" };
   let activeLayer = "Face";
@@ -324,7 +330,9 @@
     try {
       for (const layer of LAYERS) {
         const img = await loadImage(layer, selection[layer]);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const scale = canvas.height / NATIVE_H;
+        const dy = (LAYER_Y_OFFSET[layer] || 0) * scale;
+        ctx.drawImage(img, 0, dy, canvas.width, canvas.height);
         done++;
         barProgress(done / LAYERS.length);
       }
@@ -417,7 +425,9 @@
       const octx = off.getContext('2d');
       for (const layer of LAYERS) {
         const img = await loadImage(layer, selection[layer]); // already cached from preview
-        octx.drawImage(img, 0, 0, w, h);
+        const scale = h / NATIVE_H;
+        const dy = (LAYER_Y_OFFSET[layer] || 0) * scale;
+        octx.drawImage(img, 0, dy, w, h);
       }
       off.toBlob(blob => {
         const url = URL.createObjectURL(blob);
