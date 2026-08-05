@@ -122,21 +122,22 @@
   /* ---------- swatch grid ---------- */
   .color-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 
-  .mode-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+  .mode-toggle { display: flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; }
   .mode-toggle input { display: none; }
   .mode-toggle-track {
-    width: 30px; height: 17px; background: var(--twitch-surface3); border: 1px solid var(--twitch-border2);
-    border-radius: 999px; position: relative; transition: background .15s ease, border-color .15s ease;
+    width: 30px; height: 17px; background: var(--twitch-purple-faint); border: 1px solid rgba(145,71,255,.5);
+    border-radius: 999px; position: relative;
   }
   .mode-toggle-thumb {
     position: absolute; top: 1px; left: 1px; width: 13px; height: 13px; border-radius: 50%;
-    background: var(--twitch-text-dim); transition: transform .15s ease, background .15s ease;
+    background: var(--twitch-purple); transition: transform .15s ease;
   }
-  .mode-toggle input:checked + .mode-toggle-track { background: var(--twitch-purple-faint); border-color: rgba(145,71,255,.5); }
-  .mode-toggle input:checked + .mode-toggle-track .mode-toggle-thumb { transform: translateX(13px); background: var(--twitch-purple); }
+  .mode-toggle input:checked + .mode-toggle-track .mode-toggle-thumb { transform: translateX(13px); }
   .mode-toggle-label {
-    font-size: 10px; font-weight: 700; letter-spacing: .06em; color: var(--twitch-text-muted); min-width: 30px;
+    font-size: 10px; font-weight: 700; letter-spacing: .06em; color: var(--twitch-text-muted);
+    transition: color .15s ease;
   }
+  .mode-toggle-label.active { color: var(--twitch-text-alt); }
 
   .swatch-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
   .swatch {
@@ -263,9 +264,10 @@
       <div class="color-header">
         <span class="tw-label" style="margin-bottom:0;">Color — <span id="activeLayerLabel">Face</span></span>
         <label class="mode-toggle">
+          <span class="mode-toggle-label active" id="hexLabel">HEX</span>
           <input type="checkbox" id="cmykToggle">
           <span class="mode-toggle-track"><span class="mode-toggle-thumb"></span></span>
-          <span class="mode-toggle-label" id="modeToggleLabel">HEX</span>
+          <span class="mode-toggle-label" id="cmykLabel">CMYK</span>
         </label>
       </div>
       <div class="swatch-grid" id="swatchGrid"></div>
@@ -439,7 +441,8 @@
   const swatchGrid = document.getElementById('swatchGrid');
   const tooltip = document.getElementById('swatchTooltip');
   const cmykToggle = document.getElementById('cmykToggle');
-  const modeToggleLabel = document.getElementById('modeToggleLabel');
+  const hexLabel = document.getElementById('hexLabel');
+  const cmykLabel = document.getElementById('cmykLabel');
   let colorMode = 'hex'; // 'hex' | 'cmyk'
 
   function formatColorValue(c) {
@@ -451,7 +454,8 @@
 
   cmykToggle.addEventListener('change', () => {
     colorMode = cmykToggle.checked ? 'cmyk' : 'hex';
-    modeToggleLabel.textContent = colorMode === 'cmyk' ? 'CMYK' : 'HEX';
+    hexLabel.classList.toggle('active', colorMode === 'hex');
+    cmykLabel.classList.toggle('active', colorMode === 'cmyk');
     renderSelectionSummary();
     // uncompressed CMYK TIFF gets huge fast (native alone is ~46MB) — no upscaling for it
     document.getElementById('allowUpscale').disabled = (colorMode === 'cmyk');
