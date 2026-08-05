@@ -120,6 +120,24 @@
   .layer-btn-icon { max-width: 94%; max-height: 92%; object-fit: contain; display: block; }
 
   /* ---------- swatch grid ---------- */
+  .color-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+
+  .mode-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+  .mode-toggle input { display: none; }
+  .mode-toggle-track {
+    width: 30px; height: 17px; background: var(--twitch-surface3); border: 1px solid var(--twitch-border2);
+    border-radius: 999px; position: relative; transition: background .15s ease, border-color .15s ease;
+  }
+  .mode-toggle-thumb {
+    position: absolute; top: 1px; left: 1px; width: 13px; height: 13px; border-radius: 50%;
+    background: var(--twitch-text-dim); transition: transform .15s ease, background .15s ease;
+  }
+  .mode-toggle input:checked + .mode-toggle-track { background: var(--twitch-purple-faint); border-color: rgba(145,71,255,.5); }
+  .mode-toggle input:checked + .mode-toggle-track .mode-toggle-thumb { transform: translateX(13px); background: var(--twitch-purple); }
+  .mode-toggle-label {
+    font-size: 10px; font-weight: 700; letter-spacing: .06em; color: var(--twitch-text-muted); min-width: 30px;
+  }
+
   .swatch-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
   .swatch {
     aspect-ratio: 1; border-radius: var(--radius-sm); cursor: pointer;
@@ -156,6 +174,7 @@
   }
   .upscale-toggle input { accent-color: var(--twitch-purple); width: 14px; height: 14px; cursor: pointer; }
   .upscale-toggle .upscale-hint { color: var(--twitch-text-muted); }
+  .upscale-toggle.disabled-row { opacity: .45; pointer-events: none; }
 
   .tw-btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
@@ -241,7 +260,14 @@
     </div>
 
     <div class="sb-section">
-      <span class="tw-label">Color — <span id="activeLayerLabel">Face</span></span>
+      <div class="color-header">
+        <span class="tw-label" style="margin-bottom:0;">Color — <span id="activeLayerLabel">Face</span></span>
+        <label class="mode-toggle">
+          <input type="checkbox" id="cmykToggle">
+          <span class="mode-toggle-track"><span class="mode-toggle-thumb"></span></span>
+          <span class="mode-toggle-label" id="modeToggleLabel">HEX</span>
+        </label>
+      </div>
       <div class="swatch-grid" id="swatchGrid"></div>
     </div>
 
@@ -258,7 +284,7 @@
           <input class="tw-input" id="exportHeight" type="number" min="1" max="1948">
         </div>
       </div>
-      <label class="upscale-toggle">
+      <label class="upscale-toggle" id="upscaleRow">
         <input type="checkbox" id="allowUpscale">
         <span>Allow upscaling <span class="upscale-hint">(may reduce sharpness)</span></span>
       </label>
@@ -286,40 +312,43 @@
   // elsewhere in the Twitch brand system) — using the confirmed value here.
   // Ordered by hue (red -> orange -> yellow -> green -> cyan -> blue -> purple -> magenta -> red),
   // with low-saturation neutrals (black/gray/white) grouped at the end where hue is meaningless.
+  // cmyk values transcribed from the brand CMYK sheet. Note: the asset files on GitHub are
+  // still literally named "*_Crash.png" — Bandit is the correct/current display name for
+  // that color, but the internal `key` stays "Crash" so it keeps resolving to the real files.
   const PALETTE = [
-    { key: "Worm",         label: "Worm",          hex: "FACDCD" },
-    { key: "Crash",        label: "Crash",         hex: "FF6905" },
-    { key: "Dig",          label: "Dig",           hex: "904B1C" },
-    { key: "Tangy",        label: "Tangy",         hex: "FDB210" },
-    { key: "Star",         label: "Star",          hex: "FAFA19" },
-    { key: "Ooze",         label: "Ooze",          hex: "BEFF00" },
-    { key: "Junimo",       label: "Junimo",        hex: "00FA05" },
-    { key: "Grass",        label: "Grass",         hex: "009919" },
-    { key: "Rosalina",     label: "Rosalina",      hex: "BEFAE1" },
-    { key: "Rune",         label: "Rune",          hex: "69FDC2" },
-    { key: "Linc",         label: "Linc",          hex: "006441" },
-    { key: "Surf",         label: "Surf",          hex: "00C8AF" },
-    { key: "Pylon",        label: "Pylon",         hex: "00FAFA" },
-    { key: "Knights",      label: "Knights",       hex: "215264" },
-    { key: "Mana",         label: "Mana",          hex: "57BEE6" },
-    { key: "Zero",         label: "Zero",          hex: "1E69FF" },
-    { key: "Sonic",        label: "Sonic",         hex: "0014A5" },
-    { key: "Ice",          label: "Ice",           hex: "F0F0FF" },
-    { key: "Smoke",        label: "Smoke",         hex: "D2D2E6" },
-    { key: "Widow",        label: "Widow",         hex: "BFABFF" },
-    { key: "TwitchPurple", label: "Twitch Purple", hex: "9146FF" },
-    { key: "Twilight",     label: "Twilight",      hex: "41145F" },
-    { key: "Dragon",       label: "Dragon",        hex: "8205B4" },
-    { key: "Jiggle",       label: "Jiggle",        hex: "FF8DFF" },
-    { key: "Cuddle",       label: "Cuddle",        hex: "FA1ED2" },
-    { key: "Edgeworth",    label: "Edgeworth",     hex: "BE0078" },
-    { key: "Overlord",     label: "Overlord",      hex: "821946" },
-    { key: "Scourge",      label: "Scourge",       hex: "A91A26" },
-    { key: "Peach",        label: "Peach",         hex: "EA7078" },
-    { key: "Barrel",       label: "Barrel",        hex: "F7262C" },
-    { key: "BlackOps",     label: "Black Ops",     hex: "000000" },
-    { key: "Iron",         label: "Iron",          hex: "91919F" },
-    { key: "White",        label: "White",         hex: "FFFFFF" },
+    { key: "Worm",         label: "Worm",          hex: "FACDCD", cmyk: {c:0,  m:23, y:11,  k:0} },
+    { key: "Crash",        label: "Bandit",        hex: "FF6905", cmyk: {c:0,  m:78, y:100, k:0} },
+    { key: "Dig",          label: "Dig",           hex: "904B1C", cmyk: {c:30, m:73, y:100, k:26} },
+    { key: "Tangy",        label: "Tangy",         hex: "FDB210", cmyk: {c:0,  m:33, y:100, k:0} },
+    { key: "Star",         label: "Star",          hex: "FAFA19", cmyk: {c:0,  m:0,  y:100, k:0} },
+    { key: "Ooze",         label: "Ooze",          hex: "BEFF00", cmyk: {c:12, m:0,  y:80,  k:0} },
+    { key: "Junimo",       label: "Junimo",        hex: "00FA05", cmyk: {c:64, m:0,  y:100, k:0} },
+    { key: "Grass",        label: "Grass",         hex: "009919", cmyk: {c:85, m:13, y:100, k:3} },
+    { key: "Rosalina",     label: "Rosalina",      hex: "BEFAE1", cmyk: {c:22, m:0,  y:18,  k:0} },
+    { key: "Rune",         label: "Rune",          hex: "69FDC2", cmyk: {c:56, m:0,  y:40,  k:0} },
+    { key: "Linc",         label: "Linc",          hex: "006441", cmyk: {c:97, m:33, y:92,  k:26} },
+    { key: "Surf",         label: "Surf",          hex: "00C8AF", cmyk: {c:70, m:0,  y:42,  k:0} },
+    { key: "Pylon",        label: "Pylon",         hex: "00FAFA", cmyk: {c:53, m:0,  y:14,  k:0} },
+    { key: "Knights",      label: "Knights",       hex: "215264", cmyk: {c:92, m:58, y:44,  k:25} },
+    { key: "Mana",         label: "Mana",          hex: "57BEE6", cmyk: {c:58, m:6,  y:3,   k:0} },
+    { key: "Zero",         label: "Zero",          hex: "1E69FF", cmyk: {c:100,m:15, y:0,   k:0} },
+    { key: "Sonic",        label: "Sonic",         hex: "0014A5", cmyk: {c:100,m:96, y:1,   k:1} },
+    { key: "Ice",          label: "Ice",           hex: "F0F0FF", cmyk: {c:10, m:4,  y:2,   k:1} },
+    { key: "Smoke",        label: "Smoke",         hex: "D2D2E6", cmyk: {c:15, m:15, y:1,   k:0} },
+    { key: "Widow",        label: "Widow",         hex: "BFABFF", cmyk: {c:30, m:25, y:0,   k:0} },
+    { key: "TwitchPurple", label: "Twitch Purple", hex: "9146FF", cmyk: {c:57, m:60, y:0,   k:0} },
+    { key: "Twilight",     label: "Twilight",      hex: "41145F", cmyk: {c:87, m:100,y:28,  k:25} },
+    { key: "Dragon",       label: "Dragon",        hex: "8205B4", cmyk: {c:68, m:95, y:0,   k:0} },
+    { key: "Jiggle",       label: "Jiggle",        hex: "FF8DFF", cmyk: {c:5,  m:50, y:0,   k:0} },
+    { key: "Cuddle",       label: "Cuddle",        hex: "FA1ED2", cmyk: {c:0,  m:100,y:0,   k:0} },
+    { key: "Edgeworth",    label: "Edgeworth",     hex: "BE0078", cmyk: {c:22, m:100,y:13,  k:0} },
+    { key: "Overlord",     label: "Overlord",      hex: "821946", cmyk: {c:37, m:99, y:52,  k:28} },
+    { key: "Scourge",      label: "Scourge",       hex: "A91A26", cmyk: {c:23, m:100,y:95,  k:16} },
+    { key: "Peach",        label: "Peach",         hex: "EA7078", cmyk: {c:3,  m:70, y:41,  k:0} },
+    { key: "Barrel",       label: "Barrel",        hex: "F7262C", cmyk: {c:0,  m:100,y:100, k:0} },
+    { key: "BlackOps",     label: "Black Ops",     hex: "000000", cmyk: {c:100,m:80, y:40,  k:90} },
+    { key: "Iron",         label: "Iron",          hex: "91919F", cmyk: {c:46, m:39, y:29,  k:1} },
+    { key: "White",        label: "White",         hex: "FFFFFF", cmyk: {c:0, m:0, y:0, k:0} },
   ];
 
   const LAYERS = ["Outline", "Face", "Extrusion"]; // back-to-front render order — Extrusion on top, Face middle, Outline bottom
@@ -409,6 +438,27 @@
   // ---------- sidebar: swatch grid ----------
   const swatchGrid = document.getElementById('swatchGrid');
   const tooltip = document.getElementById('swatchTooltip');
+  const cmykToggle = document.getElementById('cmykToggle');
+  const modeToggleLabel = document.getElementById('modeToggleLabel');
+  let colorMode = 'hex'; // 'hex' | 'cmyk'
+
+  function formatColorValue(c) {
+    if (colorMode === 'hex') return `#${c.hex}`;
+    if (!c.cmyk) return 'CMYK not set';
+    const { c: cy, m, y, k } = c.cmyk;
+    return `C${cy} M${m} Y${y} K${k}`;
+  }
+
+  cmykToggle.addEventListener('change', () => {
+    colorMode = cmykToggle.checked ? 'cmyk' : 'hex';
+    modeToggleLabel.textContent = colorMode === 'cmyk' ? 'CMYK' : 'HEX';
+    renderSelectionSummary();
+    // uncompressed CMYK TIFF gets huge fast (native alone is ~46MB) — no upscaling for it
+    document.getElementById('allowUpscale').disabled = (colorMode === 'cmyk');
+    document.getElementById('upscaleRow').classList.toggle('disabled-row', colorMode === 'cmyk');
+    widthInput.dispatchEvent(new Event('input'));
+    document.getElementById('exportBtn').textContent = colorMode === 'cmyk' ? 'Export TIFF (CMYK)' : 'Export PNG';
+  });
 
   function positionTooltip(evt) {
     tooltip.style.left = (evt.clientX + 18) + 'px';
@@ -423,7 +473,7 @@
       el.style.background = `#${c.hex}`;
       el.dataset.key = c.key;
       el.addEventListener('mouseenter', (evt) => {
-        tooltip.innerHTML = `${c.label}<span class="hex">#${c.hex}</span>`;
+        tooltip.innerHTML = `${c.label}<span class="hex">${formatColorValue(c)}</span>`;
         tooltip.classList.add('visible');
         positionTooltip(evt);
       });
@@ -456,7 +506,7 @@
         <span class="chip-dot" style="background:#${c.hex}"></span>
         <span class="chip-text">
           <span class="chip-layer">${layer}</span>
-          <span class="chip-color">${c.label}<span class="chip-hex">#${c.hex}</span></span>
+          <span class="chip-color">${c.label}<span class="chip-hex">${formatColorValue(c)}</span></span>
         </span>
       </div>`;
     }).join('');
@@ -468,8 +518,8 @@
   const allowUpscale = document.getElementById('allowUpscale');
   const UPSCALE_MULTIPLIER = 3; // native x3 is comfortably under browser canvas size limits
 
-  function maxW() { return allowUpscale.checked ? NATIVE_W * UPSCALE_MULTIPLIER : NATIVE_W; }
-  function maxH() { return allowUpscale.checked ? NATIVE_H * UPSCALE_MULTIPLIER : NATIVE_H; }
+  function maxW() { return (allowUpscale.checked && colorMode === 'hex') ? NATIVE_W * UPSCALE_MULTIPLIER : NATIVE_W; }
+  function maxH() { return (allowUpscale.checked && colorMode === 'hex') ? NATIVE_H * UPSCALE_MULTIPLIER : NATIVE_H; }
 
   function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
 
@@ -497,6 +547,88 @@
     heightInput.value = NATIVE_H;
   });
 
+  // ---------- CMYK / TIFF export ----------
+  // Generic per-pixel RGB->CMYK formula. This is NOT the same thing as the named brand CMYK
+  // values shown in the swatches — those are calibrated per solid color; this runs on every
+  // pixel of the actual rendered artwork (including anti-aliased edges, the outline's glow falloff,
+  // and any shading), which a single named value can't represent. Real print production should
+  // still color-manage/verify this file rather than treat it as final press-ready separation.
+  function rgbToCmyk(r, g, b) {
+    const rp = r / 255, gp = g / 255, bp = b / 255;
+    const k = 1 - Math.max(rp, gp, bp);
+    if (k >= 1) return [0, 0, 0, 255];
+    const c = (1 - rp - k) / (1 - k);
+    const m = (1 - gp - k) / (1 - k);
+    const y = (1 - bp - k) / (1 - k);
+    return [Math.round(c * 255), Math.round(m * 255), Math.round(y * 255), Math.round(k * 255)];
+  }
+
+  // Minimal uncompressed CMYK+alpha TIFF encoder. Structure validated with tifffile (a strict,
+  // spec-complete reader) confirming correct tags and exact pixel round-trip before porting to JS.
+  // Note: Pillow specifically cannot open CMYK+alpha TIFFs (tested directly) — that's a real gap
+  // in one widely-used library, not a sign the file itself is malformed. Verify in the actual
+  // software that will consume this (Photoshop, your print vendor's tooling) before relying on it.
+  function buildCmykTiffBlob(width, height, cmykaBytes, dpi) {
+    const HEADER_SIZE = 8;
+    const N_ENTRIES = 14;
+    const IFD_SIZE = 2 + N_ENTRIES * 12 + 4;
+    const EXTRA_BASE = HEADER_SIZE + IFD_SIZE;
+
+    const bitsPerSampleOffset = EXTRA_BASE;      // 5 x uint16 = 10 bytes
+    const xResOffset = bitsPerSampleOffset + 10;
+    const yResOffset = xResOffset + 8;
+    const pixelOffset = yResOffset + 8;
+    const totalSize = pixelOffset + cmykaBytes.length;
+
+    const buf = new ArrayBuffer(totalSize);
+    const view = new DataView(buf);
+    const bytes = new Uint8Array(buf);
+    const u16 = (offset, value) => view.setUint16(offset, value, true);
+    const u32 = (offset, value) => view.setUint32(offset, value, true);
+
+    bytes[0] = 0x49; bytes[1] = 0x49; // 'II' little-endian
+    u16(2, 42);
+    u32(4, HEADER_SIZE);
+
+    const entries = [
+      [256, 4, 1, { u32v: width }],
+      [257, 4, 1, { u32v: height }],
+      [258, 3, 5, { u32v: bitsPerSampleOffset }],
+      [259, 3, 1, { pair: [1, 0] }],
+      [262, 3, 1, { pair: [5, 0] }],  // PhotometricInterpretation = Separated (CMYK)
+      [273, 4, 1, { u32v: pixelOffset }],
+      [277, 3, 1, { pair: [5, 0] }],  // SamplesPerPixel = 5 (CMYK + alpha)
+      [278, 4, 1, { u32v: height }],
+      [279, 4, 1, { u32v: cmykaBytes.length }],
+      [282, 5, 1, { u32v: xResOffset }],
+      [283, 5, 1, { u32v: yResOffset }],
+      [296, 3, 1, { pair: [2, 0] }],  // ResolutionUnit = inches
+      [332, 3, 1, { pair: [1, 0] }],  // InkSet = CMYK
+      [338, 3, 1, { pair: [2, 0] }],  // ExtraSamples = unassociated (straight) alpha
+    ].sort((a, b) => a[0] - b[0]);
+
+    let off = HEADER_SIZE;
+    u16(off, entries.length); off += 2;
+    for (const [tag, type, count, val] of entries) {
+      u16(off, tag); off += 2;
+      u16(off, type); off += 2;
+      u32(off, count); off += 4;
+      if (val.u32v !== undefined) u32(off, val.u32v);
+      else { u16(off, val.pair[0]); u16(off + 2, val.pair[1]); }
+      off += 4;
+    }
+    u32(off, 0); // no next IFD
+
+    u16(bitsPerSampleOffset, 8); u16(bitsPerSampleOffset + 2, 8);
+    u16(bitsPerSampleOffset + 4, 8); u16(bitsPerSampleOffset + 6, 8);
+    u16(bitsPerSampleOffset + 8, 8);
+    u32(xResOffset, dpi); u32(xResOffset + 4, 1);
+    u32(yResOffset, dpi); u32(yResOffset + 4, 1);
+    bytes.set(cmykaBytes, pixelOffset);
+
+    return new Blob([buf], { type: 'image/tiff' });
+  }
+
   // ---------- export ----------
   document.getElementById('exportBtn').addEventListener('click', async () => {
     const w = clamp(parseInt(widthInput.value) || NATIVE_W, 1, maxW());
@@ -505,35 +637,61 @@
     const exportBtn = document.getElementById('exportBtn');
     exportBtn.disabled = true;
     exportBtn.textContent = 'Exporting…';
+    await new Promise(r => setTimeout(r, 0)); // let the label above actually paint before the heavy work below
+    const restoreLabel = () => exportBtn.textContent = colorMode === 'cmyk' ? 'Export TIFF (CMYK)' : 'Export PNG';
 
     try {
       const off = document.createElement('canvas');
       off.width = w; off.height = h;
       const octx = off.getContext('2d');
+
       for (const layer of LAYERS) {
         const img = await loadImage(layer, selection[layer]); // already cached from preview
         const scale = h / NATIVE_H;
         const dy = (LAYER_Y_OFFSET[layer] || 0) * scale;
         octx.drawImage(img, 0, dy, w, h);
       }
-      off.toBlob(blob => {
+
+      const parts = LAYERS.map(l => selection[l]).join('-');
+
+      if (colorMode === 'cmyk') {
+        const imgData = octx.getImageData(0, 0, w, h).data;
+        const cmykaBytes = new Uint8Array(w * h * 5);
+        for (let i = 0, j = 0; i < imgData.length; i += 4, j += 5) {
+          const [c, m, y, k] = rgbToCmyk(imgData[i], imgData[i + 1], imgData[i + 2]);
+          cmykaBytes[j] = c; cmykaBytes[j + 1] = m; cmykaBytes[j + 2] = y; cmykaBytes[j + 3] = k;
+          cmykaBytes[j + 4] = imgData[i + 3]; // carry the real alpha through untouched
+        }
+        const blob = buildCmykTiffBlob(w, h, cmykaBytes, 300);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        const parts = LAYERS.map(l => selection[l]).join('-');
         a.href = url;
-        a.download = `twitch-logo_${parts}_${w}x${h}.png`;
+        a.download = `twitch-logo_${parts}_${w}x${h}_CMYK.tif`;
         document.body.appendChild(a);
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
         exportBtn.disabled = false;
-        exportBtn.textContent = 'Export PNG';
-      }, 'image/png');
+        restoreLabel();
+      } else {
+        off.toBlob(blob => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `twitch-logo_${parts}_${w}x${h}.png`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          exportBtn.disabled = false;
+          restoreLabel();
+        }, 'image/png');
+      }
     } catch (err) {
       console.error(err);
       alert(`Export failed.\n\n${err.message}`);
       exportBtn.disabled = false;
-      exportBtn.textContent = 'Export PNG';
+      restoreLabel();
     }
   });
 
