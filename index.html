@@ -289,7 +289,7 @@
 
   <main class="main-content">
     <div class="preview-stack">
-      <div class="preview-wrap">
+      <div class="preview-wrap" id="previewWrap">
         <canvas id="previewCanvas" width="5852" height="1948"></canvas>
       </div>
       <div class="selection-summary" id="selectionSummary"></div>
@@ -311,7 +311,7 @@
   // that color, but the internal `key` stays "Crash" so it keeps resolving to the real files.
   const PALETTE = [
     { key: "Worm",         label: "Worm",          hex: "FACDCD", cmyk: {c:0,  m:23, y:11,  k:0} },
-    { key: "Crash",        label: "Bandit",        hex: "FF6905", cmyk: {c:0,  m:78, y:100, k:0} },
+    { key: "Crash",        label: "Bandit",        hex: "FF6905", cmyk: {c:0,  m:78, y:100, k:0}, filenameOverrides: { Glitch: "Bandit" } },
     { key: "Dig",          label: "Dig",           hex: "904B1C", cmyk: {c:30, m:73, y:100, k:26} },
     { key: "Tangy",        label: "Tangy",         hex: "FDB210", cmyk: {c:0,  m:33, y:100, k:0} },
     { key: "Star",         label: "Star",          hex: "FAFA19", cmyk: {c:0,  m:0,  y:100, k:0} },
@@ -357,6 +357,7 @@
       layers: ["Face", "Outline", "Extrusion"],
       drawOrder: ["Outline", "Face", "Extrusion"], // back to front — Extrusion on top, Outline on bottom
       nativeW: 5852, nativeH: 1948,
+      previewMaxWidth: 1400,
       // Face's source files were padded to the native canvas with content vertically centered,
       // which doesn't match where Outline/Extrusion sit. Measured directly against Outline's
       // inner edges: Face needs to move up 225px at native resolution. See chat history.
@@ -367,8 +368,9 @@
       label: "Glitch",
       assetPrefix: "Glitch_",
       layers: ["Face", "Extrusion"],
-      drawOrder: ["Face", "Extrusion"], // back to front — Extrusion on top, matching Wordmark's convention
+      drawOrder: ["Extrusion", "Face"], // Face on top — unlike Wordmark, Glitch's Extrusion shape likely overlaps Face rather than just trailing beside it; drawing Extrusion first keeps it from hiding Face entirely
       nativeW: 2396, nativeH: 2944,
+      previewMaxWidth: 700, // half of Wordmark's — the tall canvas was dominating the window at the same width
       // No known misalignment yet — these files haven't been through the same registration
       // check the Wordmark's Face layer got. Verify visually once live; adjust here if needed.
       yOffset: { Face: 0, Extrusion: 0 },
@@ -387,19 +389,37 @@
 
   const imgCache = new Map(); // "Logo_Layer_Key" -> HTMLImageElement (loaded)
 
-  function assetPath(layer, key) {
-    return `./assets:/${logo().assetPrefix}${layer}_${key}.png`;
+  function colorFilenameFragment(key, logoKey = activeLogo) {
+    const entry = PALETTE.find(p => p.key === key);
+    const override = entry && entry.filenameOverrides && entry.filenameOverrides[logoKey];
+    return override || key;
   }
 
-  function loadImage(layer, key) {
-    const cacheKey = `${activeLogo}_${layer}_${key}`;
+  function assetPath(layer, key, logoKey = activeLogo) {
+    return `./assets:/${LOGOS[logoKey].assetPrefix}${layer}_${colorFilenameFragment(key, logoKey)}.png`;
+  }
+
+  function loadImage(layer, key, logoKey = activeLogo) {
+    const cacheKey = `${logoKey}_${layer}_${key}`;
     if (imgCache.has(cacheKey)) return Promise.resolve(imgCache.get(cacheKey));
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => { imgCache.set(cacheKey, img); resolve(img); };
-      img.onerror = () => reject(new Error(`Failed to load ${assetPath(layer, key)}`));
-      img.src = assetPath(layer, key);
+      img.onerror = () => reject(new Error(`Failed to load ${assetPath(layer, key, logoKey)}`));
+      img.src = assetPath(layer, key, logoKey);
     });
+  }
+
+  // Shared by the main preview and the logo-picker icons: draws a given logo's layers, in that
+  // logo's own draw order and y-offset, at whatever target size, using whatever colors are passed in.
+  async function drawLogoLayers(targetCtx, targetW, targetH, logoKey, colors) {
+    const cfg = LOGOS[logoKey];
+    for (const layer of cfg.drawOrder) {
+      const img = await loadImage(layer, colors[layer], logoKey);
+      const scale = targetH / cfg.nativeH;
+      const dy = (cfg.yOffset[layer] || 0) * scale;
+      targetCtx.drawImage(img, 0, dy, targetW, targetH);
+    }
   }
 
   // ---------- progress bar ----------
@@ -419,6 +439,8 @@
 
   // ---------- canvas render ----------
   const canvas = document.getElementById('previewCanvas');
+  const previewWrap = document.getElementById('previewWrap');
+  function syncPreviewSize() { previewWrap.style.maxWidth = logo().previewMaxWidth + 'px'; }
   const ctx = canvas.getContext('2d');
 
   async function redraw() {
@@ -446,21 +468,32 @@
   // ---------- sidebar: logo select ----------
   const logoSelect = document.getElementById('logoSelect');
 
+  function sizeIconCanvas(canvasEl, nativeW, nativeH, boxW, boxH) {
+    const scale = Math.min(boxW / nativeW, boxH / nativeH);
+    const dispW = Math.round(nativeW * scale);
+    const dispH = Math.round(nativeH * scale);
+    canvasEl.style.width = dispW + 'px';
+    canvasEl.style.height = dispH + 'px';
+    const res = 2; // internal resolution multiplier for crispness on retina displays
+    canvasEl.width = dispW * res;
+    canvasEl.height = dispH * res;
+  }
+
   function renderLogoButtons() {
     logoSelect.innerHTML = '';
     Object.keys(LOGOS).forEach(key => {
+      const cfg = LOGOS[key];
       const btn = document.createElement('button');
       btn.className = 'layer-btn' + (key === activeLogo ? ' active' : '');
       btn.dataset.logo = key;
       const iconWrap = document.createElement('span');
       iconWrap.className = 'layer-btn-icon-wrap';
-      const img = document.createElement('img');
-      img.className = 'layer-btn-icon';
-      img.alt = '';
-      img.src = `./assets:/${LOGOS[key].assetPrefix}Face_White.png`;
-      iconWrap.appendChild(img);
+      const iconCanvas = document.createElement('canvas');
+      iconCanvas.className = 'layer-btn-icon';
+      sizeIconCanvas(iconCanvas, cfg.nativeW, cfg.nativeH, 82, 34);
+      iconWrap.appendChild(iconCanvas);
       const labelSpan = document.createElement('span');
-      labelSpan.textContent = LOGOS[key].label;
+      labelSpan.textContent = cfg.label;
       btn.appendChild(iconWrap);
       btn.appendChild(labelSpan);
       btn.addEventListener('click', () => {
@@ -469,6 +502,7 @@
         activeLayer = logo().layers[0];
         canvas.width = logo().nativeW;
         canvas.height = logo().nativeH;
+        syncPreviewSize();
         renderLogoButtons();
         renderLayerButtons();
         updateSwatchActiveStates();
@@ -477,6 +511,12 @@
         redraw();
       });
       logoSelect.appendChild(btn);
+
+      // Render this logo's icon in its actual default colors (white face, purple outline/extrusion),
+      // not the flat white silhouette used for the per-layer buttons — this is the full-color preview.
+      const iconCtx = iconCanvas.getContext('2d');
+      drawLogoLayers(iconCtx, iconCanvas.width, iconCanvas.height, key, cfg.defaultSelection)
+        .catch(err => console.error(`Logo icon draw failed for ${key}:`, err));
     });
   }
 
@@ -779,6 +819,7 @@
   });
 
   // ---------- init ----------
+  syncPreviewSize();
   renderLogoButtons();
   renderLayerButtons();
   renderSwatchGrid();
