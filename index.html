@@ -337,7 +337,7 @@
     { key: "Cuddle",       label: "Cuddle",        hex: "FA1ED2", cmyk: {c:0,  m:100,y:0,   k:0} },
     { key: "Edgeworth",    label: "Edgeworth",     hex: "BE0078", cmyk: {c:22, m:100,y:13,  k:0} },
     { key: "Overlord",     label: "Overlord",      hex: "821946", cmyk: {c:37, m:99, y:52,  k:28} },
-    { key: "Scourge",      label: "Scourge",       hex: "A91A26", cmyk: {c:23, m:100,y:95,  k:16} },
+    { key: "Scourge",      label: "Scrouge",       hex: "A91A26", cmyk: {c:23, m:100,y:95,  k:16}, filenameOverrides: { Glitch: "Scrouge" } },
     { key: "Peach",        label: "Peach",         hex: "EA7078", cmyk: {c:3,  m:70, y:41,  k:0} },
     { key: "Barrel",       label: "Barrel",        hex: "F7262C", cmyk: {c:0,  m:100,y:100, k:0} },
     { key: "BlackOps",     label: "Black Ops",     hex: "000000", cmyk: {c:100,m:80, y:40,  k:90} },
@@ -370,7 +370,7 @@
       layers: ["Face", "Extrusion"],
       drawOrder: ["Extrusion", "Face"], // Face on top — unlike Wordmark, Glitch's Extrusion shape likely overlaps Face rather than just trailing beside it; drawing Extrusion first keeps it from hiding Face entirely
       nativeW: 2396, nativeH: 2944,
-      previewMaxWidth: 700, // half of Wordmark's — the tall canvas was dominating the window at the same width
+      previewMaxWidth: 455, // 700px minus another 35%, per request
       // No known misalignment yet — these files haven't been through the same registration
       // check the Wordmark's Face layer got. Verify visually once live; adjust here if needed.
       yOffset: { Face: 0, Extrusion: 0 },
