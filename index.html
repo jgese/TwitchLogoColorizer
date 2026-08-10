@@ -243,21 +243,13 @@
 
   <aside class="sidebar">
     <div class="sb-section">
+      <span class="tw-label">Logo</span>
+      <div class="layer-select" id="logoSelect"></div>
+    </div>
+
+    <div class="sb-section">
       <span class="tw-label">Layer</span>
-      <div class="layer-select" id="layerSelect">
-        <button class="layer-btn active" data-layer="Face">
-          <span class="layer-btn-icon-wrap"><img class="layer-btn-icon" src="./assets:/Face_White.png" alt=""></span>
-          <span>Face</span>
-        </button>
-        <button class="layer-btn" data-layer="Outline">
-          <span class="layer-btn-icon-wrap"><img class="layer-btn-icon" src="./assets:/Outline_White.png" alt=""></span>
-          <span>Outline</span>
-        </button>
-        <button class="layer-btn" data-layer="Extrusion">
-          <span class="layer-btn-icon-wrap"><img class="layer-btn-icon" src="./assets:/Extrusion_White.png" alt=""></span>
-          <span>Extrusion</span>
-        </button>
-      </div>
+      <div class="layer-select" id="layerSelect"></div>
     </div>
 
     <div class="sb-section">
@@ -353,28 +345,54 @@
     { key: "White",        label: "White",         hex: "FFFFFF", cmyk: {c:0, m:0, y:0, k:0} },
   ];
 
-  const LAYERS = ["Outline", "Face", "Extrusion"]; // back-to-front render order — Extrusion on top, Face middle, Outline bottom
-  const NATIVE_W = 5852, NATIVE_H = 1948;
-  const RATIO = NATIVE_W / NATIVE_H;
+  // ---------- logo configs ----------
+  // Two logos, different layer sets, different native canvases. "Wordmark" is the original
+  // 3-layer logo; "Glitch" is the 2-layer secondary mark (no Outline layer at all).
+  // assetPrefix disambiguates filenames — both logos have layers named "Face" and "Extrusion",
+  // so Glitch's files are prefixed to avoid colliding with Wordmark's.
+  const LOGOS = {
+    Wordmark: {
+      label: "Wordmark",
+      assetPrefix: "",
+      layers: ["Face", "Outline", "Extrusion"],
+      drawOrder: ["Outline", "Face", "Extrusion"], // back to front — Extrusion on top, Outline on bottom
+      nativeW: 5852, nativeH: 1948,
+      // Face's source files were padded to the native canvas with content vertically centered,
+      // which doesn't match where Outline/Extrusion sit. Measured directly against Outline's
+      // inner edges: Face needs to move up 225px at native resolution. See chat history.
+      yOffset: { Face: -225, Outline: 0, Extrusion: 0 },
+      defaultSelection: { Face: "White", Outline: "TwitchPurple", Extrusion: "TwitchPurple" },
+    },
+    Glitch: {
+      label: "Glitch",
+      assetPrefix: "Glitch_",
+      layers: ["Face", "Extrusion"],
+      drawOrder: ["Face", "Extrusion"], // back to front — Extrusion on top, matching Wordmark's convention
+      nativeW: 2396, nativeH: 2944,
+      // No known misalignment yet — these files haven't been through the same registration
+      // check the Wordmark's Face layer got. Verify visually once live; adjust here if needed.
+      yOffset: { Face: 0, Extrusion: 0 },
+      defaultSelection: { Face: "White", Extrusion: "TwitchPurple" },
+    },
+  };
 
-  // The Face layer's source files were padded to the native canvas with the content
-  // vertically centered, which doesn't match where Outline/Extrusion actually sit.
-  // Measured directly against Outline's inner edges: Face needs to move up 225px at
-  // native resolution. Expressed in native px, then scaled to whatever size is drawn.
-  const LAYER_Y_OFFSET = { Face: -225, Outline: 0, Extrusion: 0 };
-
-  // Starting selection.
-  const selection = { Face: "White", Outline: "TwitchPurple", Extrusion: "TwitchPurple" };
+  let activeLogo = "Wordmark";
   let activeLayer = "Face";
+  const selection = {
+    Wordmark: { ...LOGOS.Wordmark.defaultSelection },
+    Glitch: { ...LOGOS.Glitch.defaultSelection },
+  };
 
-  const imgCache = new Map(); // "Layer_Key" -> HTMLImageElement (loaded)
+  function logo() { return LOGOS[activeLogo]; }
+
+  const imgCache = new Map(); // "Logo_Layer_Key" -> HTMLImageElement (loaded)
 
   function assetPath(layer, key) {
-    return `./assets:/${layer}_${key}.png`;
+    return `./assets:/${logo().assetPrefix}${layer}_${key}.png`;
   }
 
   function loadImage(layer, key) {
-    const cacheKey = `${layer}_${key}`;
+    const cacheKey = `${activeLogo}_${layer}_${key}`;
     if (imgCache.has(cacheKey)) return Promise.resolve(imgCache.get(cacheKey));
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -407,14 +425,15 @@
     barStart();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     let done = 0;
+    const order = logo().drawOrder;
     try {
-      for (const layer of LAYERS) {
-        const img = await loadImage(layer, selection[layer]);
-        const scale = canvas.height / NATIVE_H;
-        const dy = (LAYER_Y_OFFSET[layer] || 0) * scale;
+      for (const layer of order) {
+        const img = await loadImage(layer, selection[activeLogo][layer]);
+        const scale = canvas.height / logo().nativeH;
+        const dy = (logo().yOffset[layer] || 0) * scale;
         ctx.drawImage(img, 0, dy, canvas.width, canvas.height);
         done++;
-        barProgress(done / LAYERS.length);
+        barProgress(done / order.length);
       }
       barDone();
     } catch (err) {
@@ -424,18 +443,74 @@
     }
   }
 
+  // ---------- sidebar: logo select ----------
+  const logoSelect = document.getElementById('logoSelect');
+
+  function renderLogoButtons() {
+    logoSelect.innerHTML = '';
+    Object.keys(LOGOS).forEach(key => {
+      const btn = document.createElement('button');
+      btn.className = 'layer-btn' + (key === activeLogo ? ' active' : '');
+      btn.dataset.logo = key;
+      const iconWrap = document.createElement('span');
+      iconWrap.className = 'layer-btn-icon-wrap';
+      const img = document.createElement('img');
+      img.className = 'layer-btn-icon';
+      img.alt = '';
+      img.src = `./assets:/${LOGOS[key].assetPrefix}Face_White.png`;
+      iconWrap.appendChild(img);
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = LOGOS[key].label;
+      btn.appendChild(iconWrap);
+      btn.appendChild(labelSpan);
+      btn.addEventListener('click', () => {
+        if (key === activeLogo) return;
+        activeLogo = key;
+        activeLayer = logo().layers[0];
+        canvas.width = logo().nativeW;
+        canvas.height = logo().nativeH;
+        renderLogoButtons();
+        renderLayerButtons();
+        updateSwatchActiveStates();
+        renderSelectionSummary();
+        resetDimsToNative();
+        redraw();
+      });
+      logoSelect.appendChild(btn);
+    });
+  }
+
   // ---------- sidebar: layer select ----------
-  const layerBtns = document.querySelectorAll('.layer-btn');
+  const layerSelect = document.getElementById('layerSelect');
   const activeLayerLabel = document.getElementById('activeLayerLabel');
 
-  layerBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      activeLayer = btn.dataset.layer;
-      layerBtns.forEach(b => b.classList.toggle('active', b === btn));
-      activeLayerLabel.textContent = activeLayer;
-      updateSwatchActiveStates();
+  function renderLayerButtons() {
+    layerSelect.innerHTML = '';
+    logo().layers.forEach(layerName => {
+      const btn = document.createElement('button');
+      btn.className = 'layer-btn' + (layerName === activeLayer ? ' active' : '');
+      btn.dataset.layer = layerName;
+      const iconWrap = document.createElement('span');
+      iconWrap.className = 'layer-btn-icon-wrap';
+      const img = document.createElement('img');
+      img.className = 'layer-btn-icon';
+      img.alt = '';
+      img.src = `./assets:/${logo().assetPrefix}${layerName}_White.png`;
+      iconWrap.appendChild(img);
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = layerName;
+      btn.appendChild(iconWrap);
+      btn.appendChild(labelSpan);
+      btn.addEventListener('click', () => {
+        activeLayer = layerName;
+        [...layerSelect.children].forEach(b => b.classList.toggle('active', b === btn));
+        activeLayerLabel.textContent = activeLayer;
+        updateSwatchActiveStates();
+      });
+      layerSelect.appendChild(btn);
     });
-  });
+    activeLayerLabel.textContent = activeLayer;
+  }
 
   // ---------- sidebar: swatch grid ----------
   const swatchGrid = document.getElementById('swatchGrid');
@@ -484,7 +559,7 @@
       el.addEventListener('mousemove', positionTooltip);
       el.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
       el.addEventListener('click', () => {
-        selection[activeLayer] = c.key;
+        selection[activeLogo][activeLayer] = c.key;
         updateSwatchActiveStates();
         renderSelectionSummary();
         redraw();
@@ -495,7 +570,7 @@
   }
 
   function updateSwatchActiveStates() {
-    const current = selection[activeLayer];
+    const current = selection[activeLogo][activeLayer];
     [...swatchGrid.children].forEach(el => {
       el.classList.toggle('active', el.dataset.key === current);
     });
@@ -504,8 +579,8 @@
   // ---------- selection summary beneath the canvas ----------
   const selectionSummaryEl = document.getElementById('selectionSummary');
   function renderSelectionSummary() {
-    selectionSummaryEl.innerHTML = ["Face", "Outline", "Extrusion"].map(layer => {
-      const c = PALETTE.find(p => p.key === selection[layer]);
+    selectionSummaryEl.innerHTML = logo().layers.map(layer => {
+      const c = PALETTE.find(p => p.key === selection[activeLogo][layer]);
       return `<div class="selection-chip">
         <span class="chip-dot" style="background:#${c.hex}"></span>
         <span class="chip-text">
@@ -522,34 +597,36 @@
   const allowUpscale = document.getElementById('allowUpscale');
   const UPSCALE_MULTIPLIER = 3; // native x3 is comfortably under browser canvas size limits
 
-  function maxW() { return (allowUpscale.checked && colorMode === 'hex') ? NATIVE_W * UPSCALE_MULTIPLIER : NATIVE_W; }
-  function maxH() { return (allowUpscale.checked && colorMode === 'hex') ? NATIVE_H * UPSCALE_MULTIPLIER : NATIVE_H; }
+  function maxW() { return (allowUpscale.checked && colorMode === 'hex') ? logo().nativeW * UPSCALE_MULTIPLIER : logo().nativeW; }
+  function maxH() { return (allowUpscale.checked && colorMode === 'hex') ? logo().nativeH * UPSCALE_MULTIPLIER : logo().nativeH; }
 
   function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
 
-  widthInput.value = NATIVE_W;
-  heightInput.value = NATIVE_H;
+  function resetDimsToNative() {
+    widthInput.max = maxW();
+    heightInput.max = maxH();
+    widthInput.value = logo().nativeW;
+    heightInput.value = logo().nativeH;
+  }
+  resetDimsToNative();
 
   widthInput.addEventListener('input', () => {
     const w = clamp(parseInt(widthInput.value) || 1, 1, maxW());
-    heightInput.value = Math.round(w / RATIO);
+    heightInput.value = Math.round(w * logo().nativeH / logo().nativeW);
   });
   heightInput.addEventListener('input', () => {
     const h = clamp(parseInt(heightInput.value) || 1, 1, maxH());
-    widthInput.value = Math.round(h * RATIO);
+    widthInput.value = Math.round(h * logo().nativeW / logo().nativeH);
   });
   allowUpscale.addEventListener('change', () => {
     widthInput.max = maxW();
     heightInput.max = maxH();
     // re-clamp whatever is currently entered against the new ceiling (matters when turning the toggle off)
-    const w = clamp(parseInt(widthInput.value) || NATIVE_W, 1, maxW());
+    const w = clamp(parseInt(widthInput.value) || logo().nativeW, 1, maxW());
     widthInput.value = w;
-    heightInput.value = Math.round(w / RATIO);
+    heightInput.value = Math.round(w * logo().nativeH / logo().nativeW);
   });
-  document.getElementById('resetDimBtn').addEventListener('click', () => {
-    widthInput.value = NATIVE_W;
-    heightInput.value = NATIVE_H;
-  });
+  document.getElementById('resetDimBtn').addEventListener('click', resetDimsToNative);
 
   // ---------- CMYK / TIFF export ----------
   // Generic per-pixel RGB->CMYK formula. This is NOT the same thing as the named brand CMYK
@@ -635,8 +712,8 @@
 
   // ---------- export ----------
   document.getElementById('exportBtn').addEventListener('click', async () => {
-    const w = clamp(parseInt(widthInput.value) || NATIVE_W, 1, maxW());
-    const h = clamp(parseInt(heightInput.value) || NATIVE_H, 1, maxH());
+    const w = clamp(parseInt(widthInput.value) || logo().nativeW, 1, maxW());
+    const h = clamp(parseInt(heightInput.value) || logo().nativeH, 1, maxH());
 
     const exportBtn = document.getElementById('exportBtn');
     exportBtn.disabled = true;
@@ -645,18 +722,20 @@
     const restoreLabel = () => exportBtn.textContent = colorMode === 'cmyk' ? 'Export TIFF (CMYK)' : 'Export PNG';
 
     try {
+      const order = logo().drawOrder;
       const off = document.createElement('canvas');
       off.width = w; off.height = h;
       const octx = off.getContext('2d');
 
-      for (const layer of LAYERS) {
-        const img = await loadImage(layer, selection[layer]); // already cached from preview
-        const scale = h / NATIVE_H;
-        const dy = (LAYER_Y_OFFSET[layer] || 0) * scale;
+      for (const layer of order) {
+        const img = await loadImage(layer, selection[activeLogo][layer]); // already cached from preview
+        const scale = h / logo().nativeH;
+        const dy = (logo().yOffset[layer] || 0) * scale;
         octx.drawImage(img, 0, dy, w, h);
       }
 
-      const parts = LAYERS.map(l => selection[l]).join('-');
+      const parts = order.map(l => selection[activeLogo][l]).join('-');
+      const namePrefix = `twitch-${activeLogo.toLowerCase()}_${parts}_${w}x${h}`;
 
       if (colorMode === 'cmyk') {
         const imgData = octx.getImageData(0, 0, w, h).data;
@@ -670,7 +749,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `twitch-logo_${parts}_${w}x${h}_CMYK.tif`;
+        a.download = `${namePrefix}_CMYK.tif`;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -682,7 +761,7 @@
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `twitch-logo_${parts}_${w}x${h}.png`;
+          a.download = `${namePrefix}.png`;
           document.body.appendChild(a);
           a.click();
           a.remove();
@@ -700,6 +779,8 @@
   });
 
   // ---------- init ----------
+  renderLogoButtons();
+  renderLayerButtons();
   renderSwatchGrid();
   renderSelectionSummary();
   redraw();
